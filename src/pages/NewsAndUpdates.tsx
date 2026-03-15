@@ -15,11 +15,13 @@ import { newsService } from '../services/newsService';
 import type { CategoryMenuItem, NewsRequest, NewsItem } from '../types/news';
 import PostCardSkeleton from '../components/news-updates/PostCardSkeleton';
 import { formatToDateTimeOffset } from '../utils/dateUtils';
+import { useMessengerContext } from '../contexts/MessengerContext';
 
 
 const NewsAndUpdates: React.FC = () => {
     const { setPageTitle } = useOutletContext<AppLayoutContext>();
     const { user } = useAuth();
+    const { users: messengerUsers, fetchBootstrap: fetchMessengerBootstrap } = useMessengerContext();
     const location = useLocation();
     const [activeCategory, setActiveCategory] = useState<PostCategory>('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -55,6 +57,18 @@ const NewsAndUpdates: React.FC = () => {
     useEffect(() => {
         setPageTitle('News & Updates');
     }, [setPageTitle]);
+
+    useEffect(() => {
+        void fetchMessengerBootstrap();
+    }, [fetchMessengerBootstrap]);
+
+    const liveStatusByUserId = React.useMemo(() => {
+        const map: Record<string, 'online' | 'away' | 'busy' | 'offline'> = {};
+        for (const u of messengerUsers) {
+            map[u.id] = u.status ?? 'offline';
+        }
+        return map;
+    }, [messengerUsers]);
 
     // Helper function to format lastModified as relative time
     const formatRelativeTime = (date: Date): string => {
@@ -128,7 +142,7 @@ const NewsAndUpdates: React.FC = () => {
         return {
             id: item.newsId.toString(),
             author: {
-                id: 'unknown',
+                id: String(item.createdBy || '').trim() || 'unknown',
                 name: item.createdByName || item.authorName || 'Unknown Author',
                 role: item.createdByDesignation || 'Staff Member',
                 avatar: item.loginUserProfileImageUrl || item.authorImage || '',
@@ -163,6 +177,36 @@ const NewsAndUpdates: React.FC = () => {
             ctaLink: resolvedCtaLink || undefined
         };
     };
+
+    const applyLiveAuthorAvailability = React.useCallback((list: Post[]): Post[] => {
+        return list.map((post) => {
+            const mappedAvailability = post.author.id !== 'unknown'
+                ? (liveStatusByUserId[post.author.id] ?? 'away')
+                : 'away';
+
+            if (post.author.availability === mappedAvailability) {
+                return post;
+            }
+
+            return {
+                ...post,
+                author: {
+                    ...post.author,
+                    availability: mappedAvailability
+                }
+            };
+        });
+    }, [liveStatusByUserId]);
+
+    const postsWithLiveStatus = React.useMemo(
+        () => applyLiveAuthorAvailability(posts),
+        [posts, applyLiveAuthorAvailability]
+    );
+
+    const pinnedPostsWithLiveStatus = React.useMemo(
+        () => applyLiveAuthorAvailability(pinnedPosts),
+        [pinnedPosts, applyLiveAuthorAvailability]
+    );
 
     const fetchPosts = React.useCallback(async (page: number, append: boolean = false) => {
         try {
@@ -617,7 +661,7 @@ const NewsAndUpdates: React.FC = () => {
                                         <PostCardSkeleton key={i} />
                                     ))}
                                 </div>
-                            ) : posts.length > 0 ? (
+                            ) : postsWithLiveStatus.length > 0 ? (
                                 <div className="flex flex-col gap-12">
                                     {isSinglePostView && (
                                         <button
@@ -633,7 +677,7 @@ const NewsAndUpdates: React.FC = () => {
                                             Back to Posts
                                         </button>
                                     )}
-                                    {posts.map((post) => {
+                                    {postsWithLiveStatus.map((post) => {
                                         return (
                                             <div
                                                 key={post.id}
@@ -696,7 +740,7 @@ const NewsAndUpdates: React.FC = () => {
                         </div>
                     ) : (
                         <PinnedPostsSidebar
-                            pinnedPosts={pinnedPosts}
+                            pinnedPosts={pinnedPostsWithLiveStatus}
                             onViewPost={handleViewPost}
                             onPinToggle={handlePinToggle}
                             pinningPostId={pinningPostId}
@@ -737,4 +781,3 @@ const NewsAndUpdates: React.FC = () => {
 };
 
 export default NewsAndUpdates;
-

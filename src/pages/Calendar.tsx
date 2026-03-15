@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import type { AppLayoutContext } from '../components/layout/AppLayout';
@@ -23,9 +23,11 @@ import { taskService } from '../services/taskService';
 import { meetingService } from '../services/meetingService';
 import type { CalendarEventItem, CalendarStaffItem } from '../types/calendar';
 import { parseUTCDate, formatToDateTimeOffset } from '../utils/dateUtils';
+import { useMessengerContext } from '../contexts/MessengerContext';
 
 const Calendar: React.FC = () => {
     const { setPageTitle } = useOutletContext<AppLayoutContext>();
+    const { users: messengerUsers, fetchBootstrap: fetchMessengerBootstrap, currentUser } = useMessengerContext();
     const [searchParams, setSearchParams] = useSearchParams();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -59,6 +61,22 @@ const Calendar: React.FC = () => {
     const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isFetchingTaskDetails, setIsFetchingTaskDetails] = useState(false);
+
+    useEffect(() => {
+        void fetchMessengerBootstrap();
+    }, [fetchMessengerBootstrap]);
+
+    const liveStatusByUserId = useMemo(() => {
+        const map: Record<string, 'online' | 'away' | 'busy' | 'offline'> = {};
+        for (const user of messengerUsers) {
+            map[user.id] = user.status ?? 'offline';
+        }
+        return map;
+    }, [messengerUsers]);
+
+    const getStaffStatus = useCallback((staffId: string) => {
+        return liveStatusByUserId[staffId] ?? 'away';
+    }, [liveStatusByUserId]);
 
     const mapStaffToUser = (staff: CalendarStaffItem): User => ({
         id: String(staff.id),
@@ -849,6 +867,8 @@ const Calendar: React.FC = () => {
                 onSelectStaff={handlePinStaff}
                 staff={allStaff}
                 pinnedStaffIds={pinnedStaffIds}
+                getStaffStatus={getStaffStatus}
+                currentUserId={currentUser.id}
             />
 
             <StaffPinnedSuccessModal

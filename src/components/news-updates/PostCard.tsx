@@ -6,6 +6,7 @@ import { categoryColors, categoryLabels } from './mockData';
 import ReactionButton from './ReactionButton';
 import { cn } from '../../lib/utils/cn';
 import HighlightText from '../common/HighlightText';
+import StatusIndicator from '../messenger/StatusIndicator';
 
 interface PostCardProps {
     post: Post;
@@ -43,6 +44,14 @@ const PostCard: React.FC<PostCardProps> = ({
 
     const categoryColor = categoryColors[post.category] || '#6B7280';
     const categoryLabel = categoryLabels[post.category] || post.category;
+    const mapAvailabilityForDisplay = (
+        availability?: 'online' | 'away' | 'busy' | 'offline'
+    ): 'active' | 'away' | 'do-not-disturb' | 'online' | 'busy' | undefined => {
+        if (!availability || availability === 'offline') {
+            return 'away';
+        }
+        return availability;
+    };
 
     if (compact) {
         return (
@@ -148,9 +157,9 @@ const PostCard: React.FC<PostCardProps> = ({
                             e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(post.author.name)}&background=3f51b5&color=fff&size=128`;
                         }}
                     />
-                    {post.author.availability === 'online' && (
-                        <div className="absolute bottom-0 right-0 w-[13px] h-[13px] bg-[#4CAF50] border-2 border-white rounded-full"></div>
-                    )}
+                    <div className="absolute bottom-0 right-0">
+                        <StatusIndicator status={mapAvailabilityForDisplay(post.author.availability)} />
+                    </div>
                 </div>
                 <div className="flex-1">
                     <h4 className="text-[16px] font-semibold text-black">{post.author.name}</h4>
@@ -320,4 +329,3 @@ const PostCard: React.FC<PostCardProps> = ({
 };
 
 export default PostCard;
-

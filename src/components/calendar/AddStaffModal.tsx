@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, X } from 'lucide-react';
 import type { User } from '../my-work/types';
 import avatarPlaceholder from '../../assets/images/default-group-icon.png';
+import StatusIndicator from '../messenger/StatusIndicator';
 
 interface AddStaffModalProps {
     isOpen: boolean;
@@ -10,6 +11,8 @@ interface AddStaffModalProps {
     onSelectStaff: (staff: User) => void;
     staff: User[];
     pinnedStaffIds?: string[];
+    getStaffStatus?: (staffId: string) => 'online' | 'away' | 'busy' | 'offline' | undefined;
+    currentUserId?: string;
 }
 
 const AddStaffModal: React.FC<AddStaffModalProps> = ({
@@ -18,6 +21,8 @@ const AddStaffModal: React.FC<AddStaffModalProps> = ({
     onSelectStaff,
     staff,
     pinnedStaffIds = [],
+    getStaffStatus,
+    currentUserId,
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -29,7 +34,9 @@ const AddStaffModal: React.FC<AddStaffModalProps> = ({
 
     // Filter staff - exclude already pinned staff and filter by search
     const filteredStaff = useMemo(() => {
-        let filtered = staff.filter((user) => !pinnedStaffIds.includes(user.id));
+        let filtered = staff.filter(
+            (user) => !pinnedStaffIds.includes(user.id) && user.id !== currentUserId
+        );
 
         if (searchTerm.trim()) {
             const query = searchTerm.trim().toLowerCase();
@@ -42,10 +49,19 @@ const AddStaffModal: React.FC<AddStaffModalProps> = ({
         }
 
         return filtered;
-    }, [staff, searchTerm, pinnedStaffIds]);
+    }, [staff, searchTerm, pinnedStaffIds, currentUserId]);
 
     const handleStaffClick = (staff: User) => {
         onSelectStaff(staff);
+    };
+
+    const mapStatusForDisplay = (
+        status?: 'online' | 'away' | 'busy' | 'offline'
+    ): 'active' | 'away' | 'do-not-disturb' | 'online' | 'busy' | undefined => {
+        if (!status || status === 'offline') {
+            return 'away';
+        }
+        return status;
     };
 
     if (!isOpen) return null;
@@ -104,7 +120,11 @@ const AddStaffModal: React.FC<AddStaffModalProps> = ({
                                             }}
                                         />
                                         {/* Availability indicator - small green dot */}
-                                        <div className="absolute bottom-0 right-0 w-[13px] h-[13px] bg-[#16A34A] rounded-full border-2 border-white"></div>
+                                        <div className="absolute bottom-0 right-0">
+                                            <StatusIndicator
+                                                status={mapStatusForDisplay(getStaffStatus?.(staff.id) ?? 'away')}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="flex-1 text-left min-w-0">
                                         <p className="text-[16px] font-semibold text-black leading-normal truncate">
