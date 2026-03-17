@@ -839,21 +839,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         className="hidden"
         onChange={handleFileSelected}
       />
-      {isReadOnlyLeftGroup && (
-        <div className="px-5 py-2.5 bg-[#FFF4E5] border-t border-[#F2D6A2] text-[#8A6116] text-sm font-medium">
-          You left this group
+      {isReadOnlyLeftGroup ? (
+        <div className="px-5 py-3 bg-[#FAFAFA] border-t border-[#E5E7EB] text-[#535352] text-sm text-center">
+          You can&apos;t send messages to this group because you&apos;re no longer a member.
         </div>
+      ) : (
+        <MessageInput
+          onSend={handleSend}
+          onTyping={handleTyping}
+          onAttachImage={handlePickImage}
+          onAttachFile={handlePickFile}
+          disabled={false}
+          isGroup={conversation.type === 'group'}
+          mentionUsers={mentionUsers}
+        />
       )}
-      <MessageInput
-        onSend={handleSend}
-        onTyping={handleTyping}
-        onAttachImage={handlePickImage}
-        onAttachFile={handlePickFile}
-        disabled={isReadOnlyLeftGroup}
-        disabledPlaceholder={isReadOnlyLeftGroup ? 'You left this group' : undefined}
-        isGroup={conversation.type === 'group'}
-        mentionUsers={mentionUsers}
-      />
     </div>
   );
 };

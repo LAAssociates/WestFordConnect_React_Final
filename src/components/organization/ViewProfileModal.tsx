@@ -9,6 +9,9 @@ import { cn } from '../../lib/utils/cn';
 import Tooltip from '../ui/Tooltip';
 import defaultAvatar from '../../assets/images/default-group-icon.png';
 import { Skeleton } from '../common/Skeleton';
+import awayIcon from '../../assets/icons/away.svg';
+import dndIcon from '../../assets/icons/dnd.svg';
+import onlineIcon from '../../assets/icons/online.svg';
 
 const ProfileSkeleton = () => (
   <div className="animate-pulse">
@@ -115,6 +118,19 @@ const ViewProfileModal: React.FC<ViewProfileModalProps> = ({
   const [profile, setProfile] = useState<ApiProfileSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const getStatusIcon = (status: Employee['status']) => {
+    switch (status) {
+      case 'at-work':
+        return onlineIcon;
+      case 'away':
+        return awayIcon;
+      case 'offline':
+        return dndIcon;
+      default:
+        return awayIcon;
+    }
+  };
 
   const fetchProfile = useCallback(async () => {
     console.log('fetchProfile called for employee:', employee);
@@ -223,11 +239,11 @@ const ViewProfileModal: React.FC<ViewProfileModalProps> = ({
                       target.src = defaultAvatar;
                     }}
                   />
-                  <div className="absolute bottom-[1px] right-1 w-[18px] h-[18px] rounded-full bg-[#FFB74D] border border-white flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="7" viewBox="0 0 10 7" fill="none">
-                      <path d="M0.5 3.02931L8.72017 3.02931M0.5 3.02931L3.02928 0.500025M0.5 3.02931L3.02928 5.55859" stroke="black" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                  </div>
+                  <img
+                    src={getStatusIcon(employee.status)}
+                    alt={`${employee.status} status`}
+                    className="absolute bottom-[1px] right-1 w-[18px] h-[18px]"
+                  />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-xl font-bold text-black mb-1">{employee.name}</h3>

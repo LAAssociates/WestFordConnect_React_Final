@@ -27,6 +27,7 @@ interface StaffDirectoryViewProps {
   onSendMessage?: (employee: Employee) => void;
   onViewSOP?: (employee: Employee) => void;
   departments: import('./types').DepartmentInfo[];
+  resolveEmployeeStatus?: (email?: string | null) => Employee['status'];
 }
 
 const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
@@ -38,6 +39,7 @@ const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
   onSendMessage,
   onViewSOP,
   departments,
+  resolveEmployeeStatus,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [staffData, setStaffData] = useState<ApiStaffDirectoryResponse | null>(null);
@@ -73,14 +75,20 @@ const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
   const employees = useMemo(() => {
     if (!staffData?.staffs) return [];
 
-    return staffData.staffs.map(transformApiStaff)
+    return staffData.staffs.map((staff) => {
+      const transformed = transformApiStaff(staff);
+      if (resolveEmployeeStatus) {
+        transformed.status = resolveEmployeeStatus(staff.email);
+      }
+      return transformed;
+    })
       .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
-  }, [staffData]);
+  }, [resolveEmployeeStatus, staffData]);
 
   const statusCounts = useMemo(() => ({
-    atWork: staffData?.atWorkCount || 0,
-    away: staffData?.awayCount || 0,
-  }), [staffData]);
+    atWork: employees.filter((x) => x.status === 'at-work').length,
+    away: employees.filter((x) => x.status === 'away').length,
+  }), [employees]);
 
   return (
     <div className="flex flex-col h-full rounded-[10px] bg-white">

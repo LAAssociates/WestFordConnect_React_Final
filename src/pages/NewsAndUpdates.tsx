@@ -711,27 +711,27 @@ const NewsAndUpdates: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="mx-auto max-w-xl w-full rounded-[24px] border border-dashed border-[#CBD5E1] bg-white p-8 text-center sm:p-12 my-12">
-                                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F5F9]">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                  </div>
-                                  <h3 className="mt-6 text-lg font-semibold text-[#111827]">No posts found</h3>
-                                  <p className="mx-auto mt-2 max-w-md text-sm text-[#6B7280]">
-                                    Try adjusting your filters or search terms. You can also create a new post to keep the news feed fresh.
-                                  </p>
-                                  <button
-                                    type="button"
-                                    onClick={handleResetFilters}
-                                    className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-[#E4E7EC] px-4 py-2.5 text-sm font-medium text-[#475467] transition hover:bg-[#F5F7FA] cursor-pointer"
-                                  >
-                                    Reset Filters
-                                  </button>
+                                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F5F9]">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#94A3B8]"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                    </div>
+                                    <h3 className="mt-6 text-lg font-semibold text-[#111827]">No posts found</h3>
+                                    <p className="mx-auto mt-2 max-w-md text-sm text-[#6B7280]">
+                                        Try adjusting your filters or search terms. You can also create a new post to keep the news feed fresh.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleResetFilters}
+                                        className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-[#E4E7EC] px-4 py-2.5 text-sm font-medium text-[#475467] transition hover:bg-[#F5F7FA] cursor-pointer"
+                                    >
+                                        Reset Filters
+                                    </button>
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white py-[26px] px-[25px] w-[26%] flex flex-col overflow-hidden">
+                <div className="bg-white py-[26px] px-[25px] w-[26%] flex flex-col overflow-y-auto">
                     {loadingPinned && pinnedPosts.length === 0 ? (
                         <div className="flex flex-col gap-4">
                             {[1, 2, 3].map((i) => (

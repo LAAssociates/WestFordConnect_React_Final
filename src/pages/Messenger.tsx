@@ -31,6 +31,7 @@ const Messenger: React.FC = () => {
     messages,
     setMessages,
     currentUser,
+    consumeUnreadConversation,
     sendMessage: apiSendMessage,
     sendFileMessage: apiSendFileMessage,
     downloadChatAttachment: apiDownloadChatAttachment,
@@ -39,6 +40,7 @@ const Messenger: React.FC = () => {
     createGroup,
     getNumericChatId,
     hubConnection,
+    setActiveChat,
     toggleChatPinned,
     toggleChatMuted,
     toggleChatUnread,
@@ -75,6 +77,12 @@ const Messenger: React.FC = () => {
       .catch((err) => console.error('Failed to fetch initial chat list:', err));
     fetchBootstrap();
   }, [setPageTitle, fetchChatList, fetchBootstrap]);
+
+  useEffect(() => {
+    return () => {
+      setActiveChat(null);
+    };
+  }, [setActiveChat]);
 
   useEffect(() => {
     // Mark that initial mount is complete after first render
@@ -194,6 +202,7 @@ const Messenger: React.FC = () => {
     // Mark conversation as read in conversations list (for sidebar display)
     // This removes the badge and mention icon from the sidebar
     if (conversation.unreadCount > 0) {
+      consumeUnreadConversation();
       setConversations((prev) =>
         prev.map((conv) => {
           if (conv.id === conversation.id) {
@@ -442,7 +451,22 @@ const Messenger: React.FC = () => {
   }, [activeFilter, projectGroupConversations.length, fetchProjectGroupChats]);
 
   const handleCloseChat = (conversationId: string) => {
-    setOpenChats(openChats.filter((chat) => chat.id !== conversationId));
+    const remainingChats = openChats.filter((chat) => chat.id !== conversationId);
+    setOpenChats(remainingChats);
+
+    if (remainingChats.length === 0) {
+      setActiveChat(null);
+      return;
+    }
+
+    const nextActiveChat = remainingChats[remainingChats.length - 1];
+    const nextChatType = nextActiveChat.type === 'individual' ? 'user' : 'group';
+    const nextChatId = getNumericChatId(nextChatType, nextActiveChat.id);
+    if (nextChatId > 0) {
+      setActiveChat({ type: nextChatType, id: nextChatId });
+    } else {
+      setActiveChat(null);
+    }
   };
 
   const handleCreateNewChat = () => {

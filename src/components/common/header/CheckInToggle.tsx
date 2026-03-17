@@ -38,6 +38,7 @@ const formatTime = (seconds: number): string => {
 
 const TODAY_UPDATED_EVENT = 'dashboard:today-updated';
 const PRESENCE_STATUS_UPDATED_EVENT = 'presence:status-updated';
+const CHECKIN_LOADING_EVENT = 'check-in:loading';
 
 const applyTodaySnapshot = (snapshot?: DashboardTodayInfo | null): TimerState => {
     const isCheckedIn = Boolean(snapshot?.isCheckedIn);
@@ -55,6 +56,18 @@ const CheckInToggle: React.FC = () => {
     const [timerState, setTimerState] = React.useState<TimerState>(DEFAULT_TIMER_STATE);
     const [displaySeconds, setDisplaySeconds] = React.useState(0);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+    React.useEffect(() => {
+        const handleLoading = (event: Event) => {
+            const payload = (event as CustomEvent).detail;
+            setIsSubmitting(payload.isLoading);
+        };
+
+        window.addEventListener(CHECKIN_LOADING_EVENT, handleLoading as EventListener);
+        return () => {
+            window.removeEventListener(CHECKIN_LOADING_EVENT, handleLoading as EventListener);
+        };
+    }, []);
 
     React.useEffect(() => {
         let mounted = true;

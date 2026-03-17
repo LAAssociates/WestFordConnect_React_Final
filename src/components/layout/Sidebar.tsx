@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 
 import { cn } from '../../lib/utils/cn';
 import SidebarNavItem from './SidebarNavItem';
@@ -31,12 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen = false, onNavigate, onH
     onNavigate?.();
   }, [onNavigate]);
 
-  const { conversations } = useMessengerContext();
-
-  // Calculate count of conversations with unread messages
-  const unreadConversationsCount = useMemo(() => {
-    return conversations.filter((conv) => conv.unreadCount > 0 && !conv.isMuted).length;
-  }, [conversations]);
+  const { unreadConversationCount } = useMessengerContext();
 
   return (
     <aside
@@ -62,7 +57,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen = false, onNavigate, onH
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto scrollbar-hide">
         <div className="flex flex-col">
           <SidebarNavItem to="/dashboard" icon={dashboardMenuIcon} tooltip="Dashboard" onNavigate={handleNavItemClick} />
-          <SidebarNavItem to="/messenger" icon={messengerMenuIcon} tooltip="Messenger" onNavigate={handleNavItemClick} badgeCount={unreadConversationsCount} />
+          <SidebarNavItem to="/messenger" icon={messengerMenuIcon} tooltip="Messenger" onNavigate={handleNavItemClick} badgeCount={unreadConversationCount} />
           <SidebarNavItem to="/calendar" icon={calenderMenuIcon} tooltip="Calendar" onNavigate={handleNavItemClick} />
           <SidebarNavItem to="/my-work" icon={myWorkMenuIcon} tooltip="My Work" onNavigate={handleNavItemClick} />
           <SidebarNavItem to="/notes" icon={notesMenuIcon} tooltip="Notes" onNavigate={handleNavItemClick} />

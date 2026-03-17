@@ -33,6 +33,17 @@ export interface ChatListResponse {
   timestamp: string;
 }
 
+export interface ChatUnreadCountResponse {
+  success: boolean;
+  message: string;
+  result: {
+    unreadConversationCount: number;
+  } | null;
+  errors: any | null;
+  requestId: string;
+  timestamp: string;
+}
+
 export interface ChatSendRequest {
   chatType: 'user' | 'group';
   chatId: number;
@@ -58,12 +69,28 @@ export interface StartPrivateChatRequest {
   targetUserId: number;
 }
 
+export interface StartPrivateChatByEmailRequest {
+  targetEmail: string;
+}
+
 export interface StartPrivateChatResponse {
   success: boolean;
   message: string;
   result: {
     chatId: number;
   };
+  errors: any | null;
+  requestId: string;
+  timestamp: string;
+}
+
+export interface StartPrivateChatByEmailResponse {
+  success: boolean;
+  message: string;
+  result: {
+    chatId: number;
+    targetUserId: number;
+  } | null;
   errors: any | null;
   requestId: string;
   timestamp: string;

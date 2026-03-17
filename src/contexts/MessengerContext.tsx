@@ -14,8 +14,11 @@ interface MessengerContextType {
     setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
     users: User[];
     currentUser: User;
+    unreadConversationCount: number;
     isLoadingChatList: boolean;
     isLoadingBootstrap: boolean;
+    consumeUnreadConversation: () => void;
+    refreshUnreadConversationCount: () => Promise<void>;
     fetchChatList: (showLoadingIndicator?: boolean, page?: number, size?: number, append?: boolean) => Promise<number>;
     fetchProjectGroupChats: (page?: number, size?: number) => Promise<Conversation[]>;
     fetchBootstrap: () => Promise<void>;
@@ -82,6 +85,7 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [typingUsers, setTypingUsers] = useState<Record<string, { userId: string; userName: string; timestamp: number }>>({});
     const [users, setUsers] = useState<User[]>([]);
+    const [unreadConversationCount, setUnreadConversationCount] = useState(0);
     const [isLoadingChatList, setIsLoadingChatList] = useState(false);
     const [isLoadingBootstrap, setIsLoadingBootstrap] = useState(false);
     const [hubConnection, setHubConnection] = useState<HubConnection | null>(null);
@@ -379,6 +383,21 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
             }
         }
     }, [mapServerChatToConversation]);
+
+    const refreshUnreadConversationCount = useCallback(async (): Promise<void> => {
+        try {
+            const response = await chatService.getUnreadCount();
+            if (response.success) {
+                setUnreadConversationCount(response.result?.unreadConversationCount ?? 0);
+            }
+        } catch (error) {
+            console.error('Failed to fetch chat unread count:', error);
+        }
+    }, []);
+
+    const consumeUnreadConversation = useCallback(() => {
+        setUnreadConversationCount((prev) => Math.max(0, prev - 1));
+    }, []);
 
     const fetchProjectGroupChats = useCallback(async (
         page: number = 1,
@@ -901,6 +920,10 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
 
             const incomingChatType = normalizeChatType(msg.chatType);
             const convId = incomingChatType === 'user' ? `conv-${msg.chatId}` : `conv-group-${msg.chatId}`;
+            const existingConversation = conversationsRef.current.find((conv) => conv.id === convId);
+            const isActiveIncomingChat =
+                activeChatRef.current?.type === incomingChatType &&
+                activeChatRef.current?.id === Number(msg.chatId);
 
             // Determine status based on flags if present, otherwise default to 'sent'
             const isRead = msg.isRead === true;
@@ -916,6 +939,15 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
                 status: status,
                 attachments: mapAttachments(msg.attachments),
             };
+            const shouldIncrementUnreadConversationCount =
+                newMsg.senderId !== currentUserRef.current.id &&
+                !isActiveIncomingChat &&
+                !(existingConversation?.isMuted === true) &&
+                (existingConversation?.unreadCount ?? 0) === 0;
+
+            if (shouldIncrementUnreadConversationCount) {
+                setUnreadConversationCount((count) => count + 1);
+            }
 
             setMessages((prev) => {
                 const existingMessages = prev[convId] || [];
@@ -965,19 +997,24 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
 
             // Update conversation last message in conversations list
             setConversations((prev) => {
-                const isActiveIncomingChat =
-                    activeChatRef.current?.type === incomingChatType &&
-                    activeChatRef.current?.id === Number(msg.chatId);
                 const exists = prev.some(conv => conv.id === convId);
                 if (exists) {
-                    return prev.map(conv => conv.id === convId ? {
-                        ...conv,
-                        lastMessage: newMsg,
-                        lastMessageTime: newMsg.timestamp,
-                        unreadCount: newMsg.senderId === currentUserRef.current.id
+                    return prev.map((conv) => {
+                        if (conv.id !== convId) {
+                            return conv;
+                        }
+
+                        const nextUnreadCount = newMsg.senderId === currentUserRef.current.id
                             ? conv.unreadCount
-                            : (isActiveIncomingChat ? 0 : conv.unreadCount + 1)
-                    } : conv);
+                            : (isActiveIncomingChat ? 0 : conv.unreadCount + 1);
+
+                        return {
+                            ...conv,
+                            lastMessage: newMsg,
+                            lastMessageTime: newMsg.timestamp,
+                            unreadCount: nextUnreadCount
+                        };
+                    });
                 } else {
                     // New conversation from someone else
                     const newConv: Conversation = {
@@ -993,6 +1030,7 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
                             { id: msg.senderId?.toString(), name: msg.senderName, position: 'Contact', status: 'online', email: '' }
                         ] : [] // Group participants would need an extra fetch or be in msg
                     };
+
                     return [newConv, ...prev];
                 }
             });
@@ -1085,11 +1123,20 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
                     avatar: chat.avatarUrl || existing?.avatar,
                     lastMessage: lastMsg ?? existing?.lastMessage,
                     lastMessageTime: new Date(chat.lastMessageTime || existing?.lastMessageTime || Date.now()),
-                    unreadCount: isPatchedChatActive
-                        ? 0
-                        : (typeof chat.unreadCount === 'number'
+                    unreadCount: (() => {
+                        if (isPatchedChatActive) {
+                            return 0;
+                        }
+
+                        const existingUnreadCount = existing?.unreadCount || 0;
+                        const patchedUnreadCount = typeof chat.unreadCount === 'number'
                             ? chat.unreadCount
-                            : (existing?.unreadCount || 0)),
+                            : existingUnreadCount;
+
+                        // Preserve higher local unread count so a slightly stale patch
+                        // does not wipe realtime badges right after ReceiveMessage.
+                        return Math.max(existingUnreadCount, patchedUnreadCount);
+                    })(),
                     participants,
                     isOnline: typeof chat.isOnline === 'boolean' ? chat.isOnline : existing?.isOnline,
                     isPinned: typeof chat.isPinned === 'boolean' ? chat.isPinned : existing?.isPinned,
@@ -1121,6 +1168,9 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
                 isOnline
             );
 
+            const changedUser = usersRef.current.find((u) => Number(u.id) === userId);
+            const normalizedChangedUserName = (changedUser?.name || '').trim().toLowerCase();
+
             setUsers((prev) =>
                 prev.map((u) =>
                     Number(u.id) === userId
@@ -1136,7 +1186,11 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
                     }
 
                     const hasTargetParticipant = conv.participants.some((p) => Number(p.id) === userId);
-                    if (!hasTargetParticipant) {
+                    const hasNameFallbackMatch =
+                        !!normalizedChangedUserName &&
+                        conv.name.trim().toLowerCase() === normalizedChangedUserName;
+
+                    if (!hasTargetParticipant && !hasNameFallbackMatch) {
                         return conv;
                     }
 
@@ -1145,6 +1199,10 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
                         isOnline,
                         participants: conv.participants.map((p) =>
                             Number(p.id) === userId
+                                || (
+                                    hasNameFallbackMatch &&
+                                    Number(p.id) !== Number(currentUserRef.current.id)
+                                )
                                 ? { ...p, status: mappedStatus }
                                 : p
                         )
@@ -1410,8 +1468,10 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
     useEffect(() => {
         if (authUser) {
             connect().catch((err) => console.error('Failed to connect SignalR (app-wide):', err));
+            refreshUnreadConversationCount().catch((err) => console.error('Failed to fetch chat unread count on login:', err));
         } else {
             disconnect().catch((err) => console.error('Failed to disconnect SignalR:', err));
+            setUnreadConversationCount(0);
         }
 
         const handleTokenRefresh = () => {
@@ -1423,7 +1483,7 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
 
         window.addEventListener('auth:token-refreshed', handleTokenRefresh);
         return () => window.removeEventListener('auth:token-refreshed', handleTokenRefresh);
-    }, [authUser, connect, disconnect]);
+    }, [authUser, connect, disconnect, refreshUnreadConversationCount]);
     const startPrivateChat = useCallback(async (targetUserId: number): Promise<number> => {
         try {
             const response = await chatService.startPrivateChat({ targetUserId });
@@ -1534,8 +1594,11 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({ children }
         setConversations,
         users,
         currentUser,
+        unreadConversationCount,
         isLoadingChatList,
         isLoadingBootstrap,
+        consumeUnreadConversation,
+        refreshUnreadConversationCount,
         fetchChatList,
         fetchProjectGroupChats,
         fetchBootstrap,

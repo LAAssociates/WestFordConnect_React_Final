@@ -3,11 +3,14 @@ import type { AxiosProgressEvent } from 'axios';
 import type {
   ChatBootstrapResponse,
   ChatListResponse,
+  ChatUnreadCountResponse,
   ChatSendRequest,
   ChatSendFileRequest,
   ChatDownloadAttachmentRequest,
   ChatSendResponse,
   StartPrivateChatRequest,
+  StartPrivateChatByEmailRequest,
+  StartPrivateChatByEmailResponse,
   StartPrivateChatResponse,
   ChatMessageResponse,
   CreateGroupRequest,
@@ -29,6 +32,10 @@ export const chatService = {
     return apiClient.get<ChatListResponse>('/api/Chat/list', {
       params: { page, size }
     });
+  },
+
+  getUnreadCount: async (): Promise<ChatUnreadCountResponse> => {
+    return apiClient.get<ChatUnreadCountResponse>('/api/Chat/unread-count');
   },
 
   getProjectGroupChats: async (page: number = 1, size: number = 50): Promise<ChatListResponse> => {
@@ -69,6 +76,10 @@ export const chatService = {
 
   startPrivateChat: async (payload: StartPrivateChatRequest): Promise<StartPrivateChatResponse> => {
     return apiClient.post<StartPrivateChatResponse>('/api/chat/private/start', payload);
+  },
+
+  startPrivateChatByEmail: async (payload: StartPrivateChatByEmailRequest): Promise<StartPrivateChatByEmailResponse> => {
+    return apiClient.post<StartPrivateChatByEmailResponse>('/api/chat/private/start-by-email', payload);
   },
 
   createGroup: async (payload: CreateGroupRequest): Promise<CreateGroupResponse> => {

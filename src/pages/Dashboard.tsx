@@ -315,6 +315,7 @@ const Dashboard: React.FC = () => {
     const mapPeopleMoment = (item: DashboardPeopleMomentItem): PeopleMoment => ({
         id: String(item.id),
         employeeName: item.employeeName || 'Unknown',
+        email: item.email || item.employeeEmail || item.userEmail || undefined,
         position: item.position || 'Staff',
         avatar: item.profileImageUrl || item.ProfileImageUrl || item.avatarUrl || avatarPlaceholder,
         date: item.date || '',

@@ -180,6 +180,9 @@ export interface DashboardBootstrapResponse {
 export interface DashboardPeopleMomentItem {
   id: number;
   employeeName: string;
+  email?: string | null;
+  employeeEmail?: string | null;
+  userEmail?: string | null;
   position: string;
   profileImageUrl?: string | null;
   ProfileImageUrl?: string | null;

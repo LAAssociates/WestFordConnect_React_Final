@@ -147,6 +147,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   }, []);
 
   if (isGroupLeaveSystemMessage) {
+    if (isOwnMessage) {
+      return null;
+    }
+
     const text = isOwnMessage
       ? 'You left the group'
       : message.content;

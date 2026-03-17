@@ -3,7 +3,7 @@ import { BellOff } from 'lucide-react';
 import { cn } from '../../lib/utils/cn';
 import type { Conversation } from './types';
 import StatusIndicator from './StatusIndicator';
-import avatarPlaceholder from '../../assets/images/default-group-icon.png';
+import avatarPlaceholder from '../../assets/images/avatar-placeholder-2.png';
 import ConversationDropdown from '../common/ConversationDropdown';
 import HighlightText from '../common/HighlightText';
 
@@ -69,10 +69,21 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   };
 
   const lastMessagePreview = conversation.lastMessage
-    ? conversation.type === 'group' && conversation.lastMessage.senderName !== 'You'
+    ? conversation.type === 'group' && conversation.lastMessage.senderId !== currentUserId
       ? `${conversation.lastMessage.senderName}: ${normalizeIncomingMentionPreview(conversation.lastMessage.content)}`
-      : normalizeIncomingMentionPreview(conversation.lastMessage.content)
+      : conversation.type === 'group' && conversation.lastMessage.senderId === currentUserId
+        ? `You: ${normalizeIncomingMentionPreview(conversation.lastMessage.content)}`
+        : normalizeIncomingMentionPreview(conversation.lastMessage.content)
     : 'No messages yet';
+  const isOwnLeaveGroupPreview =
+    conversation.type === 'group' &&
+    conversation.isLeft === true &&
+    !!conversation.lastMessage &&
+    conversation.lastMessage.senderId === currentUserId &&
+    /left the group$/i.test((conversation.lastMessage.content || '').trim());
+  const resolvedLastMessagePreview = isOwnLeaveGroupPreview
+    ? 'You left the group'
+    : lastMessagePreview;
 
   // Get the other participant (not current user) - only for individual conversations
   const otherParticipant = conversation.type === 'individual'
@@ -150,14 +161,17 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
         <div className="flex items-center justify-between">
           <p className={cn("text-[13px] truncate flex-1 mr-2 text-[#535352] font-normal flex items-center")}>
             {conversation.lastMessage?.senderId === currentUserId && renderMessageStatus()}
-            {conversation.type === 'group' && conversation.lastMessage && conversation.lastMessage.senderName !== 'You' ? (
-                <span className="truncate">
-                  <span className="font-medium">{conversation.lastMessage.senderName}:</span>{' '}
-                  <span>{normalizeIncomingMentionPreview(conversation.lastMessage.content)}</span>
-                </span>
-              ) : (
-                <span className="truncate">{lastMessagePreview.replace(/^You: /, '')}</span>
-              )}
+            {conversation.type === 'group' &&
+              conversation.lastMessage &&
+              conversation.lastMessage.senderId !== currentUserId &&
+              !isOwnLeaveGroupPreview ? (
+              <span className="truncate">
+                <span className="font-medium">{conversation.lastMessage.senderName}:</span>{' '}
+                <span>{normalizeIncomingMentionPreview(conversation.lastMessage.content)}</span>
+              </span>
+            ) : (
+              <span className="truncate">{resolvedLastMessagePreview.replace(/^You: /, '')}</span>
+            )}
           </p>
           <div className="flex items-center gap-1">
             {showUnreadIndicators && conversation.mentions && conversation.mentions > 0 && (

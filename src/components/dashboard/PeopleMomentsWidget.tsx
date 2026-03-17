@@ -1,20 +1,21 @@
 import { MacScrollbar } from 'mac-scrollbar';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import drRamanSubramanianAvatar from '../../assets/images/avatars/raman.png';
 import shazinAbdullaAvatar from '../../assets/images/avatars/shazin.png';
 import backgroundImage from '../../assets/images/Graffiti.png';
 import { cn } from '../../lib/utils/cn';
-import { mockUsers } from '../messenger/mockData';
+import { chatService } from '../../services/chatService';
+import CustomToast from '../common/CustomToast';
 import Tooltip from '../ui/Tooltip';
 import DashboardWidget from './DashboardWidget';
-import { mockAvailabilityItems } from './mockData';
 
 export interface PeopleMoment {
   id: string;
   employeeName: string;
   position: string;
   avatar: string;
+  email?: string;
   date: string;
   eventType: 'work-anniversary' | 'birthday';
   years?: number; // for anniversaries
@@ -57,24 +58,60 @@ const PeopleMomentsWidget: React.FC<PeopleMomentsWidgetProps> = ({
   filters = { viewType: 'both', timeFrame: 'today' },
 }) => {
   const navigate = useNavigate();
+  const [isStartingDirectMessage, setIsStartingDirectMessage] = useState(false);
+  const [toastState, setToastState] = useState<{
+    show: boolean;
+    title?: string;
+    message: string;
+    type: 'success' | 'error';
+  }>({
+    show: false,
+    title: undefined,
+    message: '',
+    type: 'error',
+  });
 
-  // Helper function to find user ID by employee name
-  const findUserIdByName = (employeeName: string): string | null => {
-    // First try to find in mockUsers
-    const user = mockUsers.find((u) => u.name.toLowerCase() === employeeName.toLowerCase());
-    if (user) {
-      return user.id;
+  const handleSendGreeting = async (moment: PeopleMoment) => {
+    if (isStartingDirectMessage) return;
+
+    const targetEmail = (moment.email || '').trim();
+    if (!targetEmail) {
+      setToastState({
+        show: true,
+        title: 'Unable to Send Message',
+        message: 'User email is not available for direct message.',
+        type: 'error',
+      });
+      return;
     }
 
-    // Then try to find in mockAvailabilityItems
-    const availabilityItem = mockAvailabilityItems.find(
-      (item) => item.name.toLowerCase() === employeeName.toLowerCase()
-    );
-    if (availabilityItem) {
-      return availabilityItem.id;
-    }
+    setIsStartingDirectMessage(true);
+    try {
+      const response = await chatService.startPrivateChatByEmail({ targetEmail });
 
-    return null;
+      if (!response.success || !response.result?.targetUserId) {
+        setToastState({
+          show: true,
+          title: 'Unable to Send Message',
+          message: response.message || 'Unable to start direct message.',
+          type: 'error',
+        });
+        return;
+      }
+
+      navigate(`/messenger?user=${response.result.targetUserId}`);
+    } catch (error: any) {
+      const apiMessage = error?.response?.data?.message;
+      const fallbackMessage = error instanceof Error ? error.message : '';
+      setToastState({
+        show: true,
+        title: 'Unable to Send Message',
+        message: apiMessage || fallbackMessage || 'Unable to start direct message.',
+        type: 'error',
+      });
+    } finally {
+      setIsStartingDirectMessage(false);
+    }
   };
 
   // Filter moments based on filters
@@ -188,13 +225,11 @@ const PeopleMomentsWidget: React.FC<PeopleMomentsWidgetProps> = ({
                           <Tooltip content="Send a greeting!" side="left">
                             <button
                               type="button"
-                              className="cursor-pointer"
+                              className="cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                              disabled={isStartingDirectMessage}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const userId = findUserIdByName(moment.employeeName);
-                                if (userId) {
-                                  navigate(`/messenger?user=${userId}`);
-                                }
+                                void handleSendGreeting(moment);
                               }}
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21" fill="none">
@@ -234,6 +269,13 @@ const PeopleMomentsWidget: React.FC<PeopleMomentsWidgetProps> = ({
           </div>
         </MacScrollbar>
       </div>
+      <CustomToast
+        show={toastState.show}
+        title={toastState.title}
+        message={toastState.message}
+        type={toastState.type}
+        onClose={() => setToastState((prev) => ({ ...prev, show: false }))}
+      />
     </DashboardWidget>
   );
 };

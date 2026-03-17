@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils/cn";
 import type { AppLayoutContext } from "../components/layout/AppLayout";
 import type { Employee } from "../components/organization/types";
@@ -10,6 +11,7 @@ import {
   transformApiDepartments,
   getDepartmentNameById,
 } from "../services/organizationService";
+import { chatService } from "../services/chatService";
 import OrgChartView from "../components/organization/OrgChartView";
 import StaffDirectoryView from "../components/organization/StaffDirectoryView";
 import ViewProfileModal from "../components/organization/ViewProfileModal";
@@ -21,11 +23,16 @@ import StaffRemovedModal from "../components/organization/StaffRemovedModal";
 import OrgChartUpdatedModal from "../components/organization/OrgChartUpdatedModal";
 import ChangesDiscardedModal from "../components/organization/ChangesDiscardedModal";
 import StaffAddedModal from "../components/organization/StaffAddedModal";
+import CustomToast from "../components/common/CustomToast";
+import { useMessengerContext } from "../contexts/MessengerContext";
+import type { EmployeeStatus, OrgChartNode } from "../components/organization/types";
 
 type ViewType = "org-chart" | "directory";
 
 const Organization: React.FC = () => {
   const { setPageTitle } = useOutletContext<AppLayoutContext>();
+  const navigate = useNavigate();
+  const { hubConnection } = useMessengerContext();
   const [activeView, setActiveView] = useState<ViewType>("org-chart");
   // Separate state for each view's department filter
   const [orgChartSelectedDepartment, setOrgChartSelectedDepartment] =
@@ -57,6 +64,60 @@ const Organization: React.FC = () => {
   const [staffAddedModalOpen, setStaffAddedModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedManager, setSelectedManager] = useState<Employee | null>(null);
+  const [isStartingDirectMessage, setIsStartingDirectMessage] = useState(false);
+  const [toastState, setToastState] = useState<{
+    show: boolean;
+    title?: string;
+    message: string;
+    type: "success" | "error";
+  }>({
+    show: false,
+    title: undefined,
+    message: "",
+    type: "error",
+  });
+  const [registeredUsersByEmail, setRegisteredUsersByEmail] = useState<Record<string, { userId: number }>>({});
+  const [presenceByUserId, setPresenceByUserId] = useState<Record<number, { availabilityStatus?: number | null; isOnline?: boolean | null }>>({});
+
+  const normalizeEmail = React.useCallback((value?: string | null) => (value || "").trim().toLowerCase(), []);
+
+  const mapPresenceToEmployeeStatus = React.useCallback((
+    availabilityStatus?: number | null,
+    isOnline?: boolean | null
+  ): EmployeeStatus => {
+    if (!isOnline) return "away";
+    if (availabilityStatus === 1) return "offline"; // Do Not Disturb
+    if (availabilityStatus === 3) return "away";
+    return "at-work";
+  }, []);
+
+  const resolveEmployeeStatusByEmail = React.useCallback((email?: string | null): EmployeeStatus => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) return "away";
+
+    const registeredUser = registeredUsersByEmail[normalizedEmail];
+    if (!registeredUser) {
+      return "away";
+    }
+
+    const presence = presenceByUserId[registeredUser.userId];
+    return mapPresenceToEmployeeStatus(presence?.availabilityStatus, presence?.isOnline);
+  }, [mapPresenceToEmployeeStatus, normalizeEmail, presenceByUserId, registeredUsersByEmail]);
+
+  const applyPresenceToOrgChart = React.useCallback((node: OrgChartNode | null): OrgChartNode | null => {
+    if (!node) return null;
+
+    const mapNode = (input: OrgChartNode): OrgChartNode => ({
+      ...input,
+      employee: {
+        ...input.employee,
+        status: resolveEmployeeStatusByEmail(input.employee.email),
+      },
+      children: input.children?.map(mapNode),
+    });
+
+    return mapNode(node);
+  }, [resolveEmployeeStatusByEmail]);
 
   React.useEffect(() => {
     setPageTitle("Organization");
@@ -70,9 +131,29 @@ const Organization: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [apiDepts] = await Promise.all([
+        const [apiDepts, chatBootstrap] = await Promise.all([
           getDepartments(),
+          chatService.bootstrap(),
         ]);
+
+        const users = Array.isArray(chatBootstrap?.result?.users) ? chatBootstrap.result.users : [];
+        const usersByEmail: Record<string, { userId: number }> = {};
+        const initialPresenceByUserId: Record<number, { availabilityStatus?: number | null; isOnline?: boolean | null }> = {};
+
+        users.forEach((u) => {
+          const normalizedEmail = normalizeEmail(u.email);
+          if (normalizedEmail && Number.isFinite(Number(u.id))) {
+            usersByEmail[normalizedEmail] = { userId: Number(u.id) };
+            initialPresenceByUserId[Number(u.id)] = {
+              availabilityStatus: typeof u.availabilityStatus === "number" ? u.availabilityStatus : undefined,
+              isOnline: typeof u.isOnline === "boolean" ? u.isOnline : undefined,
+            };
+          }
+        });
+
+        setRegisteredUsersByEmail(usersByEmail);
+        setPresenceByUserId(initialPresenceByUserId);
+
         const transformedDepts = transformApiDepartments(apiDepts);
         setDepartments(transformedDepts);
 
@@ -85,7 +166,7 @@ const Organization: React.FC = () => {
           try {
             const apiOrgChart = await getOrgChart(departmentId);
             const transformedOrgChart = transformApiOrgChart(apiOrgChart);
-            setOrgChart(transformedOrgChart);
+            setOrgChart(applyPresenceToOrgChart(transformedOrgChart));
           } catch (err) {
             console.error("Initial org chart load error:", err);
           }
@@ -99,7 +180,7 @@ const Organization: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [applyPresenceToOrgChart, normalizeEmail]);
 
 
 
@@ -114,7 +195,10 @@ const Organization: React.FC = () => {
   };
 
   const handleViewProfile = (employee: Employee) => {
-    setSelectedEmployee(employee);
+    setSelectedEmployee({
+      ...employee,
+      status: resolveEmployeeStatusByEmail(employee.email),
+    });
     setViewProfileOpen(true);
   };
 
@@ -130,8 +214,49 @@ const Organization: React.FC = () => {
     // Handle call
   };
 
-  const handleSendMessage = (_employee: Employee) => {
-    // Handle send message
+  const handleSendMessage = async (employee: Employee) => {
+    if (isStartingDirectMessage) {
+      return;
+    }
+
+    const targetEmail = (employee.email || "").trim();
+    if (!targetEmail) {
+      setToastState({
+        show: true,
+        title: "Unable to Send Message",
+        message: "User email is not available for direct message.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsStartingDirectMessage(true);
+    try {
+      const response = await chatService.startPrivateChatByEmail({ targetEmail });
+
+      if (!response.success || !response.result?.targetUserId) {
+        setToastState({
+          show: true,
+          title: "Unable to Send Message",
+          message: response.message || "Unable to start direct message.",
+          type: "error",
+        });
+        return;
+      }
+
+      navigate(`/messenger?user=${response.result.targetUserId}`);
+    } catch (error: any) {
+      const apiMessage = error?.response?.data?.message;
+      const fallbackMessage = error instanceof Error ? error.message : "";
+      setToastState({
+        show: true,
+        title: "Unable to Send Message",
+        message: apiMessage || fallbackMessage || "Unable to start direct message.",
+        type: "error",
+      });
+    } finally {
+      setIsStartingDirectMessage(false);
+    }
   };
 
   const handleAddEmployee = () => {
@@ -196,7 +321,7 @@ const Organization: React.FC = () => {
       // Call API with DepartmentId parameter
       const apiOrgChart = await getOrgChart(departmentId);
       const transformedOrgChart = transformApiOrgChart(apiOrgChart);
-      setOrgChart(transformedOrgChart);
+      setOrgChart(applyPresenceToOrgChart(transformedOrgChart));
     } catch (err: any) {
       console.error("Org Chart API Error:", err);
       setError(err.message || "Failed to load org chart");
@@ -204,6 +329,49 @@ const Organization: React.FC = () => {
       setOrgChartLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    setOrgChart((prev: OrgChartNode | null) => applyPresenceToOrgChart(prev));
+  }, [applyPresenceToOrgChart, presenceByUserId, registeredUsersByEmail]);
+
+  React.useEffect(() => {
+    if (!hubConnection) return;
+
+    const onUserPresenceChanged = (evt: any) => {
+      const userId = Number(evt?.userId ?? evt?.UserId);
+      if (!Number.isFinite(userId)) return;
+
+      const statusCodeRaw = evt?.status ?? evt?.Status;
+      const isOnlineRaw = evt?.isOnline ?? evt?.IsOnline;
+      const availabilityStatus = Number.isFinite(Number(statusCodeRaw)) ? Number(statusCodeRaw) : undefined;
+      const isOnline = typeof isOnlineRaw === "boolean" ? isOnlineRaw : undefined;
+
+      setPresenceByUserId((prev) => ({
+        ...prev,
+        [userId]: {
+          availabilityStatus,
+          isOnline,
+        },
+      }));
+    };
+
+    hubConnection.on("UserPresenceChanged", onUserPresenceChanged);
+    return () => {
+      hubConnection.off("UserPresenceChanged", onUserPresenceChanged);
+    };
+  }, [hubConnection]);
+
+  React.useEffect(() => {
+    setSelectedEmployee((prev) => {
+      if (!prev) return prev;
+      const nextStatus = resolveEmployeeStatusByEmail(prev.email);
+      if (prev.status === nextStatus) return prev;
+      return {
+        ...prev,
+        status: nextStatus,
+      };
+    });
+  }, [presenceByUserId, registeredUsersByEmail, resolveEmployeeStatusByEmail]);
 
   const handleDirectoryDepartmentFilter = (deptId: string) => {
     setDirectorySelectedDepartment(deptId);
@@ -351,6 +519,7 @@ const Organization: React.FC = () => {
             onSendMessage={handleSendMessage}
             onViewSOP={handleViewSOP}
             departments={departments}
+            resolveEmployeeStatus={resolveEmployeeStatusByEmail}
           />
         )}
       </div>
@@ -418,6 +587,16 @@ const Organization: React.FC = () => {
           setSelectedManager(null);
         }}
         onViewManager={handleViewProfile}
+      />
+
+      <CustomToast
+        show={toastState.show}
+        title={toastState.title}
+        message={toastState.message}
+        type={toastState.type}
+        iconType={toastState.type === "error" ? "error" : "check"}
+        onClose={() => setToastState((prev) => ({ ...prev, show: false }))}
+        duration={3000}
       />
     </div>
   );
